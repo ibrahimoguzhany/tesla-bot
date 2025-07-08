@@ -1,53 +1,49 @@
-const puppeteer = require("puppeteer");
-const TelegramBot = require("node-telegram-bot-api");
-require("dotenv").config();
+require('dotenv').config();
+const axios = require('axios');
+const cheerio = require('cheerio');
+const TelegramBot = require('node-telegram-bot-api');
 
-const TELEGRAM_TOKEN = process.env.TELEGRAM_TOKEN;
+const bot = new TelegramBot(process.env.BOT_TOKEN, { polling: false });
 const CHAT_ID = process.env.CHAT_ID;
-const INVENTORY_URL = "https://www.tesla.com/tr_tr/inventory/new/my?arrangeby=plh&range=50";
+const CHECK_INTERVAL = 30 * 1000;
 
-const bot = new TelegramBot(TELEGRAM_TOKEN);
-let sentLinks = [];
+const TARGET_URL = 'https://www.tesla.com/tr_tr/inventory/new/my?arrangeby=plh&zip=34340&range=0';
 
-async function checkTeslaInventory() {
-  console.log("⏱ Kontrol ediliyor...");
+const sentLinks = new Set();
 
-  let browser;
+async function checkForVehicles() {
   try {
-    const browser = await puppeteer.launch({
-  args: ['--no-sandbox', '--disable-setuid-sandbox'],
-  headless: true
-});
-    const page = await browser.newPage();
-    await page.goto(INVENTORY_URL, { waitUntil: "networkidle2" });
+    const response = await axios.get(TARGET_URL);
+    const $ = cheerio.load(response.data);
 
-    const vehicles = await page.evaluate(() => {
-      return Array.from(document.querySelectorAll("a[data-qa='vehicle-card-link']")).map(link => {
-        const title = link.innerText;
-        const href = link.href;
-        return { title, href };
-      });
+    $("a[data-qa='vehicle-card-link']").each((_, element) => {
+      const title = $(element).text();
+      const href = $(element).attr('href');
+
+      // 🔍 Filtre: Model Y içerecek, Long geçmeyecek, daha önce gönderilmemiş olacak
+      if (
+        href &&
+        title.toLowerCase().includes("model y") &&
+        !title.toLowerCase().includes("long") &&
+        !sentLinks.has(href)
+      ) {
+        const fullLink = `https://www.tesla.com${href}`;
+        sentLinks.add(href);
+
+        bot.sendMessage(
+          CHAT_ID,
+          `🚗 *Model Y bulundu!*\n[Linke gitmek için tıkla](${fullLink})\n\n*Araç*: ${title}`,
+          { parse_mode: "Markdown" }
+        );
+
+        console.log("✅ Yeni araç bulundu:", fullLink);
+      }
     });
 
-    const match = vehicles.find(v =>
-      v.title.toLowerCase().includes("model y") &&
-      !v.title.toLowerCase().includes("long") &&
-      !sentLinks.includes(v.href)
-    );
-
-    if (match) {
-      sentLinks.push(match.href);
-      await bot.sendMessage(CHAT_ID, `🚗 *Model Y XP7Y264* bulundu! [Sipariş Ver](${match.href})`, {
-        parse_mode: "Markdown"
-      });
-      console.log("✅ Yeni araç bulundu:", match.href);
-    }
   } catch (error) {
-    console.error("❌ Hata oluştu:", error.message);
-  } finally {
-    if (browser) await browser.close();
+    console.error("❌ Hata:", error.message);
   }
 }
 
-// 🔁 Bu satır eksikse hiçbir şey çalışmaz!
-setInterval(checkTeslaInventory, 5000); // 5 saniyede bir
+setInterval(checkForVehicles, CHECK_INTERVAL);
+checkForVehicles();
