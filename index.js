@@ -15,8 +15,8 @@ async function checkTeslaInventory() {
   let browser;
   try {
     const browser = await puppeteer.launch({
-  headless: "new",
-  args: ["--no-sandbox", "--disable-setuid-sandbox"]
+  args: ['--no-sandbox', '--disable-setuid-sandbox'],
+  headless: true
 });
     const page = await browser.newPage();
     await page.goto(INVENTORY_URL, { waitUntil: "networkidle2" });
