@@ -42,12 +42,6 @@ async function checkTeslaInventory() {
       });
       console.log("✅ Yeni araç bulundu:", match.href);
     }
-
-await bot.sendMessage(CHAT_ID, "✅ *Test mesajı:* Sistem çalışıyor. [Örnek sipariş linki](https://www.tesla.com/tr_tr/inventory/new/my)", {
-  parse_mode: "Markdown"
-});
-
-
   } catch (error) {
     console.error("❌ Hata oluştu:", error.message);
   } finally {
